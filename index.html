@@ -1,46 +1,32 @@
 <!doctype html>
-<html lang="hi">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Trading Analyzer</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-:root{--bg:#0f1419;--panel:#161c24;--line:#242d38;--tx:#e6e9ee;--mut:#8b96a5;--up:#2ebd85;--dn:#f6465d}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,sans-serif}
-header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
-select{background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit}
-#price{font-size:18px;font-weight:600}
-#bias{padding:2px 10px;border-radius:12px;font-weight:600;border:1px solid var(--line)}
-.bull{color:var(--up);border-color:var(--up)!important}.bear{color:var(--dn);border-color:var(--dn)!important}
-#wrap{position:relative;height:60vh;min-height:300px}
+:root{--bg:#0f1419;--p:#161c24;--ln:#242d38;--tx:#e6e9ee;--mu:#8b96a5;--up:#2ebd85;--dn:#f6465d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.4 system-ui,sans-serif}
+header,#chips,#tabs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px}
+select,button{background:var(--p);color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:5px 8px;font:inherit}
+button.on{border-color:var(--up);color:var(--up)}
+#price{font-size:17px;font-weight:600}#bias{padding:1px 9px;border-radius:12px;font-weight:600;border:1px solid var(--ln)}
+.bull,.up{color:var(--up)}.bear,.dn{color:var(--dn)}.mu{color:var(--mu)}
+#verdict{padding:0 10px 6px;font-weight:600}#err{color:var(--dn);padding:0 10px}
+#wrap{position:relative;height:58vh;min-height:300px}#sub{height:150px}
 #chart,#ov{position:absolute;inset:0;width:100%;height:100%}#ov{pointer-events:none}
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;padding:12px}
-section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-h2{margin:0 0 8px;font-size:14px}
-.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)}
-.row:last-child{border:0}.up{color:var(--up)}.dn{color:var(--dn)}.mu{color:var(--mut)}
-#err{color:var(--dn);padding:0 12px}
-</style>
-</head>
-<body>
-<header>
-  <select id="coin"></select>
-  <select id="tf"><option>5m</option><option selected>15m</option><option>1h</option><option>4h</option><option>1d</option></select>
-  <span id="price">-</span><span id="bias">-</span><span class="mu" id="upd"></span>
-</header>
-<div id="err"></div>
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;padding:10px}
+section{background:var(--p);border:1px solid var(--ln);border-radius:8px;padding:8px 10px}
+h2{margin:0 0 6px;font-size:13px}.row{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px solid var(--ln)}
+</style></head><body>
+<header><select id="coin"></select><select id="tf"><option selected>1m</option><option>5m</option><option>15m</option><option>1h</option><option>4h</option><option>1d</option></select>
+<span id="price">-</span><span id="bias">-</span><span class="mu" id="upd"></span></header>
+<div id="verdict"></div><div id="err"></div><div id="chips"></div>
 <div id="wrap"><div id="chart"></div><canvas id="ov"></canvas></div>
-<main>
-  <section><h2>Indicator votes</h2><div id="votes"></div></section>
-  <section><h2>Levels</h2><div id="levels"></div></section>
-  <section><h2>Recent positions</h2><div id="pos"></div></section>
-</main>
+<div id="tabs"></div><div id="sub"></div>
+<main><section><h2>12 indicator votes</h2><div id="votes"></div></section><section><h2>Decisions (marking history)</h2><div id="pos"></div></section></main>
 <script>
 // ===ANALYSIS_START===
 const COINS=["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","TRXUSDT"];
-const THRESHOLD=6,SL_ATR=1.5,RR=2,MAX_LEN=40;
+const THRESHOLD=4,MAX_LEN=30,FQ=[0,.236,.382,.5,.618,1];
 const ema=(a,n)=>{const k=2/(n+1);let p=a[0];return a.map((x,i)=>(p=i?x*k+p*(1-k):x))};
 const rma=(a,n)=>{let p=a[0];return a.map((x,i)=>(p=i?p+(x-p)/n:x))};
 const roll=(a,n,f)=>a.map((_,i)=>i<n-1?NaN:f(a.slice(i-n+1,i+1)));
@@ -48,138 +34,146 @@ const sma=(a,n)=>roll(a,n,w=>w.reduce((s,x)=>s+x,0)/n);
 const sd=(a,n)=>roll(a,n,w=>{const m=w.reduce((s,x)=>s+x,0)/n;return Math.sqrt(w.reduce((s,x)=>s+(x-m)**2,0)/(n-1))});
 const rmax=(a,n)=>roll(a,n,w=>Math.max(...w)),rmin=(a,n)=>roll(a,n,w=>Math.min(...w));
 const sg=(u,d)=>u?1:d?-1:0;
-
 function analyze(R){
   const n=R.length,t=R.map(r=>r.t),o=R.map(r=>r.o),h=R.map(r=>r.h),l=R.map(r=>r.l),c=R.map(r=>r.c),v=R.map(r=>r.v);
   const tr=c.map((_,i)=>i?Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])):h[0]-l[0]);
-  const atr=(m=14)=>rma(tr,m),a14=atr(14);
-  const dl=c.map((x,i)=>i?x-c[i-1]:0);
-  const rsiA=rma(dl.map(x=>Math.max(x,0)),14).map((u,i)=>{const d=rma(dl.map(x=>Math.max(-x,0)),14)[i];return 100-100/(1+u/d)});
+  const a14=rma(tr,14),a10=rma(tr,10);
+  const dl=c.map((x,i)=>i?x-c[i-1]:0),ru=rma(dl.map(x=>Math.max(x,0)),14),rd=rma(dl.map(x=>Math.max(-x,0)),14);
+  const rsi=ru.map((u,i)=>100-100/(1+u/rd[i]));
   const up=h.map((x,i)=>i?x-h[i-1]:0),dn=l.map((x,i)=>i?l[i-1]-x:0);
-  const pdi=rma(up.map((u,i)=>u>dn[i]&&u>0?u:0),14).map((x,i)=>100*x/a14[i]);
-  const mdi=rma(dn.map((d,i)=>d>up[i]&&d>0?d:0),14).map((x,i)=>100*x/a14[i]);
+  const pdi=rma(up.map((u,i)=>u>dn[i]&&u>0?u:0),14).map((x,i)=>100*x/a14[i]),mdi=rma(dn.map((d,i)=>d>up[i]&&d>0?d:0),14).map((x,i)=>100*x/a14[i]);
   const adx=rma(pdi.map((p,i)=>{const s=p+mdi[i];return s?100*Math.abs(p-mdi[i])/s:0}),14);
-  // Supertrend
-  const a10=atr(10),ub=[],lb=[],fu=[],fl=[],st=[];
-  for(let i=0;i<n;i++){const m=(h[i]+l[i])/2;ub[i]=m+3*a10[i];lb[i]=m-3*a10[i];fu[i]=ub[i];fl[i]=lb[i];st[i]=1;
-    if(i){fu[i]=(ub[i]<fu[i-1]||c[i-1]>fu[i-1])?ub[i]:fu[i-1];fl[i]=(lb[i]>fl[i-1]||c[i-1]<fl[i-1])?lb[i]:fl[i-1];
-      st[i]=st[i-1]==1?(c[i]<fl[i]?-1:1):(c[i]>fu[i]?1:-1)}}
-  // Parabolic SAR
+  const fu=[],fl=[],st=[];
+  for(let i=0;i<n;i++){const m=(h[i]+l[i])/2,ub=m+3*a10[i],lb=m-3*a10[i];fu[i]=ub;fl[i]=lb;st[i]=1;
+    if(i){fu[i]=(ub<fu[i-1]||c[i-1]>fu[i-1])?ub:fu[i-1];fl[i]=(lb>fl[i-1]||c[i-1]<fl[i-1])?lb:fl[i-1];st[i]=st[i-1]==1?(c[i]<fl[i]?-1:1):(c[i]>fu[i]?1:-1)}}
+  const stL=st.map((d,i)=>d==1?fl[i]:fu[i]);
   const sar=[1],s=[l[0]];let ep=h[0],af=.02;
   for(let i=1;i<n;i++){const p2=i>1?i-2:i-1;s[i]=s[i-1]+af*(ep-s[i-1]);
-    if(sar[i-1]){s[i]=Math.min(s[i],l[i-1],l[p2]);sar[i]=1;
-      if(l[i]<s[i]){sar[i]=0;s[i]=ep;ep=l[i];af=.02}else if(h[i]>ep){ep=h[i];af=Math.min(af+.02,.2)}}
-    else{s[i]=Math.max(s[i],h[i-1],h[p2]);sar[i]=0;
-      if(h[i]>s[i]){sar[i]=1;s[i]=ep;ep=h[i];af=.02}else if(l[i]<ep){ep=l[i];af=Math.min(af+.02,.2)}}}
-  // daily levels (prev day high/low/close), VWAP
-  const day=t.map(x=>Math.floor(x/86400)),D=new Map();
-  day.forEach((d,i)=>{const e=D.get(d);if(!e)D.set(d,{h:h[i],l:l[i],c:c[i]});else{e.h=Math.max(e.h,h[i]);e.l=Math.min(e.l,l[i]);e.c=c[i]}});
-  const days=[...D.keys()],pv=day.map(d=>D.get(days[days.indexOf(d)-1]));
+    if(sar[i-1]){s[i]=Math.min(s[i],l[i-1],l[p2]);sar[i]=1;if(l[i]<s[i]){sar[i]=0;s[i]=ep;ep=l[i];af=.02}else if(h[i]>ep){ep=h[i];af=Math.min(af+.02,.2)}}
+    else{s[i]=Math.max(s[i],h[i-1],h[p2]);sar[i]=0;if(h[i]>s[i]){sar[i]=1;s[i]=ep;ep=h[i];af=.02}else if(l[i]<ep){ep=l[i];af=Math.min(af+.02,.2)}}}
+  const day=t.map(x=>Math.floor(x/86400)),DM=new Map();
+  day.forEach((d,i)=>{const e=DM.get(d);if(!e)DM.set(d,{h:h[i],l:l[i],c:c[i]});else{e.h=Math.max(e.h,h[i]);e.l=Math.min(e.l,l[i]);e.c=c[i]}});
+  const days=[...DM.keys()],pv=day.map(d=>DM.get(days[days.indexOf(d)-1]));
   const pH=pv.map(x=>x?x.h:NaN),pL=pv.map(x=>x?x.l:NaN),pC=pv.map(x=>x?x.c:NaN);
   const P=pH.map((x,i)=>(x+pL[i]+pC[i])/3),mid=pH.map((x,i)=>(x+pL[i])/2);
-  const vwap=[];let cv=0,cvv=0,cd=-1;
-  for(let i=0;i<n;i++){if(day[i]!=cd){cd=day[i];cv=0;cvv=0}const tp=(h[i]+l[i]+c[i])/3;cv+=tp*v[i];cvv+=v[i];vwap[i]=cv/cvv}
-  const s50=sma(c,50),s200=sma(c,200),e50=ema(c,50),bm=sma(c,20),bs=sd(c,20);
-  const bu=bm.map((x,i)=>x+2*bs[i]),bl=bm.map((x,i)=>x-2*bs[i]);
-  const e12=ema(c,12),e26=ema(c,26),macd=e12.map((x,i)=>x-e26[i]),sig=ema(macd,9);
+  const R1=P.map((p,i)=>2*p-pL[i]),S1=P.map((p,i)=>2*p-pH[i]),R2=P.map((p,i)=>p+pH[i]-pL[i]),S2=P.map((p,i)=>p-(pH[i]-pL[i]));
+  const vw=[];let cv=0,cvv=0,cd=-1;
+  for(let i=0;i<n;i++){if(day[i]!=cd){cd=day[i];cv=0;cvv=0}cv+=(h[i]+l[i]+c[i])/3*v[i];cvv+=v[i];vw[i]=cv/cvv}
+  const s50=sma(c,50),s200=sma(c,200),e50=ema(c,50),bm=sma(c,20),bs=sd(c,20),bu=bm.map((x,i)=>x+2*bs[i]),bl=bm.map((x,i)=>x-2*bs[i]);
+  const e12=ema(c,12),e26=ema(c,26),macd=e12.map((x,i)=>x-e26[i]),sig=ema(macd,9),hist=macd.map((x,i)=>x-sig[i]);
   const lo14=rmin(l,14),hi14=rmax(h,14),K=sma(c.map((x,i)=>100*(x-lo14[i])/(hi14[i]-lo14[i])),3),Dd=sma(K,3);
-  const volMA=sma(v,20),swH=rmax(h,8),swL=rmin(l,8);
-  const names=["RSI","SMA 50/200","EMA 50","Bollinger","MACD","Supertrend","Parabolic SAR","Pivot","VWAP","Stochastic","Prev-Day 50%"];
-  const votes=i=>{const near=Math.abs(c[i]-mid[i])<.05*(pH[i]-pL[i]);return [
-    sg(rsiA[i]>50&&rsiA[i]<70,rsiA[i]<50&&rsiA[i]>30),sg(s50[i]>s200[i],s50[i]<s200[i]),sg(c[i]>e50[i],c[i]<e50[i]),
-    sg(c[i]<bl[i],c[i]>bu[i]),sg(macd[i]>sig[i]&&macd[i]>0,macd[i]<sig[i]&&macd[i]<0),st[i],sar[i]?1:-1,
-    sg(c[i]>P[i],c[i]<P[i]),sg(c[i]>vwap[i],c[i]<vwap[i]),sg(K[i]>Dd[i]&&K[i]>20,K[i]<Dd[i]&&K[i]<80),
+  const vma=sma(v,20),swH=rmax(h,8),swL=rmin(l,8);
+  // Fibonacci swing (last 100 candles): up = low pehle, high baad me
+  const fs=i=>{const a=Math.max(0,i-99);let hi=-1e18,lo=1e18,hiI=a,loI=a;for(let k=a;k<=i;k++){if(h[k]>hi){hi=h[k];hiI=k}if(l[k]<lo){lo=l[k];loI=k}}return{hi,lo,up:loI<hiI}};
+  const fv=(f,q)=>f.up?f.hi-(f.hi-f.lo)*q:f.lo+(f.hi-f.lo)*q;
+  const fibVote=i=>{const f=fs(i),a=fv(f,.618),b=fv(f,.382);
+    return f.up?sg(c[i]>=a&&c[i]<=b&&c[i]>o[i],c[i]<a):sg(c[i]>a,c[i]>=b&&c[i]<=a&&c[i]<o[i])};
+  const names=["RSI (14)","SMA 50/200","EMA 50","Bollinger (20,2)","MACD (12,26,9)","Supertrend (10,3)","Parabolic SAR","Pivot Standard","VWAP (session)","Stochastic (14,3,3)","Fibonacci (100)","Prev-Day 50%"];
+  const votes=i=>{const near=Math.abs(c[i]-mid[i])<.05*(pH[i]-pL[i]);return[
+    sg(rsi[i]>50&&rsi[i]<70,rsi[i]<50&&rsi[i]>30),sg(s50[i]>s200[i],s50[i]<s200[i]),sg(c[i]>e50[i],c[i]<e50[i]),sg(c[i]<bl[i],c[i]>bu[i]),
+    sg(macd[i]>sig[i]&&macd[i]>0,macd[i]<sig[i]&&macd[i]<0),st[i],sar[i]?1:-1,sg(c[i]>P[i],c[i]<P[i]),sg(c[i]>vw[i],c[i]<vw[i]),
+    sg(K[i]>Dd[i]&&K[i]>20,K[i]<Dd[i]&&K[i]<80),fibVote(i),
     sg(swL[i]<pL[i]&&c[i]>pL[i]&&c[i]<=mid[i]&&!near,swH[i]>pH[i]&&c[i]<pH[i]&&c[i]>=mid[i]&&!near)]};
-  const sc=i=>votes(i).reduce((x,y)=>x+y,0),ok=i=>adx[i]>20&&v[i]>volMA[i];
-  const pos=[];
-  for(let i=210;i<n-1;){
+  const sc=i=>votes(i).reduce((x,y)=>x+y,0),step=t[n-1]-t[n-2],pos=[];
+  for(let i=30;i<n;){
     const S=sc(i),side=S>=THRESHOLD?1:S<=-THRESHOLD?-1:0;
-    if(!side||!ok(i)||isNaN(a14[i])){i++;continue}
-    const e=c[i],risk=SL_ATR*a14[i],slp=e-side*risk,tpp=e+side*risk*RR;
+    if(!side||isNaN(a14[i])){i++;continue}
+    const e=c[i],a=a14[i],sv=s[i];let sl=e-side*1.2*a,slN="1.2 ATR";
+    if(side*(e-sv)>=.5*a&&side*(e-sv)<=3*a){sl=sv;slN="SAR"}
+    const risk=Math.abs(e-sl),f=fs(i),cand=[[P[i],"Pivot"],[R1[i],"R1"],[R2[i],"R2"],[S1[i],"S1"],[S2[i],"S2"],[pH[i],"Prev High"],[pL[i],"Prev Low"],[mid[i],"Prev 50%"],[bu[i],"BB up"],[bl[i],"BB low"],...FQ.map(q=>[fv(f,q),"Fib "+q])]
+      .filter(x=>side*(x[0]-e)>=risk&&side*(x[0]-e)<=6*risk).sort((x,y)=>Math.abs(x[0]-e)-Math.abs(y[0]-e));
+    const [tp,tpN]=cand.length?cand[0]:[e+side*1.5*risk,"RR 1.5"];
     let end=Math.min(i+MAX_LEN,n-1),status=i+MAX_LEN>=n-1?"open":"timeout";
-    for(let j=i+1;j<=Math.min(i+MAX_LEN,n-1);j++){
-      const hs=side==1?l[j]<=slp:h[j]>=slp,ht=side==1?h[j]>=tpp:l[j]<=tpp;
-      if(hs||ht){end=j;status=hs?"sl":"tp";break}}
-    pos.push({side:side==1?"LONG":"SHORT",t0:t[i],t1:t[end],entry:e,sl:slp,tp:tpp,candles:end-i,status});i=end+1}
-  const last=n-1,S=sc(last),vt=votes(last),W=R.slice(-100);
-  const Hh=Math.max(...W.map(x=>x.h)),Ll=Math.min(...W.map(x=>x.l));
-  const hiI=W.findIndex(x=>x.h==Hh),loI=W.findIndex(x=>x.l==Ll),fib={};
-  [.236,.382,.5,.618].forEach(q=>fib[q]=loI<hiI?Hh-(Hh-Ll)*q:Ll+(Hh-Ll)*q);
-  const show=R.slice(-300),tMin=show[0].t;
-  return {price:c[last],score:S,bias:S>=THRESHOLD?"BULLISH":S<=-THRESHOLD?"BEARISH":"NEUTRAL",
-    candles:show.map(r=>({time:r.t,open:r.o,high:r.h,low:r.l,close:r.c})),
-    volume:show.map(r=>({time:r.t,value:r.v,color:r.c>=r.o?"#26a69a66":"#ef535066"})),
-    votes:Object.fromEntries(names.map((k,i)=>[k,vt[i]])),fib,positions:pos.filter(p=>p.t1>=tMin),
-    info:{rsi:rsiA[last],adx:adx[last],vwap:vwap[last],pivot:P[last],prevHigh:pH[last],prevMid:mid[last],prevLow:pL[last],
-      bbUpper:bu[last],bbLower:bl[last],volumeOK:v[last]>volMA[last],trendOK:adx[last]>20}};
+    for(let j=i+1;j<=Math.min(i+MAX_LEN,n-1);j++){const hs=side==1?l[j]<=sl:h[j]>=sl,ht=side==1?h[j]>=tp:l[j]<=tp;if(hs||ht){end=j;status=hs?"sl":"tp";break}}
+    if(status==="timeout")status=(c[end]-e)*side>0?"win":"loss";
+    const conf=adx[i]>20&&v[i]>vma[i];let t1=t[end];
+    if(status==="open"){const rem=Math.max(1,Math.min(12,Math.ceil(Math.abs(tp-c[n-1])/(.5*a14[n-1]))));t1=t[n-1]+rem*step}
+    pos.push({side:side==1?"LONG":"SHORT",t0:t[i],t1,entry:e,sl,tp,slN,tpN,candles:Math.round((t1-t[i])/step),status,conf,score:S});i=end+1}
+  const L=n-1,vt=votes(L),S=sc(L),off=Math.max(0,n-300),sl=a=>a.slice(off),sh=R.slice(off),tMin=sh[0].t;
+  const pvt=(arr,k,dir)=>{const r=[];for(let i=Math.max(4,n-150);i<n-4;i++){let ok=1;for(let m=1;m<=4;m++)if(dir*(arr[i]-arr[i-m])<=0||dir*(arr[i]-arr[i+m])<=0)ok=0;if(ok)r.push([t[i],arr[i]])}return r.slice(-2)};
+  const lo2=pvt(l,0,-1),hi2=pvt(h,0,1),f=fs(L);
+  const tx=[rsi[L].toFixed(0),s50[L]>s200[L]?"50 upar":"50 neeche",c[L]>e50[L]?"price upar":"price neeche",c[L]<bl[L]?"lower ke neeche":c[L]>bu[L]?"upper ke upar":"beech me",
+    macd[L]>sig[L]?"MACD>signal":"MACD<signal",st[L]==1?"green":"red",sar[L]?"dots neeche":"dots upar",c[L]>P[L]?"P ke upar":"P ke neeche",c[L]>vw[L]?"VWAP upar":"VWAP neeche",
+    K[L].toFixed(0),vt[10]?"zone signal":"zone se bahar",vt[11]?"sweep+sustain":"-"];
+  return{price:c[L],score:S,bias:S>=THRESHOLD?"BULLISH":S<=-THRESHOLD?"BEARISH":"NEUTRAL",step,
+    candles:sh.map(r=>({time:r.t,open:r.o,high:r.h,low:r.l,close:r.c})),
+    vol:sh.map(r=>({time:r.t,value:r.v,color:r.c>=r.o?"#26a69a66":"#ef535066"})),
+    s:{sma50:sl(s50),sma200:sl(s200),ema50:sl(e50),bu:sl(bu),bm:sl(bm),bl:sl(bl),vwap:sl(vw),vma:sl(vma),st:sl(stL),stD:sl(st),sar:sl(s),sarUp:sl(sar),rsi:sl(rsi),macd:sl(macd),sig:sl(sig),hist:sl(hist),K:sl(K),D:sl(Dd),adx:sl(adx)},
+    lv:{P:P[L],R1:R1[L],R2:R2[L],S1:S1[L],S2:S2[L],pH:pH[L],pL:pL[L],mid:mid[L]},fib:FQ.map(q=>[q,fv(f,q)]),
+    tl:{sup:lo2.length==2?lo2:null,res:hi2.length==2?hi2:null},
+    votes:Object.fromEntries(names.map((k,i)=>[k,[vt[i],tx[i]]])),positions:pos.filter(p=>p.t1>=tMin),
+    info:{adx:adx[L],trendOK:adx[L]>20,volumeOK:v[L]>vma[L]}};
 }
 // ===ANALYSIS_END===
-
 const $=id=>document.getElementById(id);
-async function klines(sym,itv){
-  let err;
-  for(const H of ["https://api.binance.com","https://data-api.binance.vision"]){
+async function klines(sym,itv){let err;
+  for(const H of["https://api.binance.com","https://data-api.binance.vision"]){
     try{const r=await fetch(`${H}/api/v3/klines?symbol=${sym}&interval=${itv}&limit=700`);if(!r.ok)throw new Error(r.status);
-      return (await r.json()).map(k=>({t:Math.floor(k[0]/1000),o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}))}
-    catch(e){err=e}}
-  throw new Error("Binance data nahi mila ("+err.message+")");
-}
-const chart=LightweightCharts.createChart($('chart'),{autoSize:true,
-  layout:{background:{color:'#0f1419'},textColor:'#8b96a5'},
-  grid:{vertLines:{color:'#1a222b'},horzLines:{color:'#1a222b'}},
-  timeScale:{timeVisible:true,rightOffset:25,borderColor:'#242d38'},rightPriceScale:{borderColor:'#242d38'}});
+      return(await r.json()).map(k=>({t:Math.floor(k[0]/1000),o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}))}catch(e){err=e}}
+  throw new Error("Binance data nahi mila ("+err.message+")")}
+const TH={layout:{background:{color:'#0f1419'},textColor:'#8b96a5'},grid:{vertLines:{color:'#1a222b'},horzLines:{color:'#1a222b'}},rightPriceScale:{borderColor:'#242d38'}};
+const chart=LightweightCharts.createChart($('chart'),{autoSize:true,...TH,timeScale:{timeVisible:true,rightOffset:20,borderColor:'#242d38'}});
+const sub=LightweightCharts.createChart($('sub'),{autoSize:true,...TH,timeScale:{timeVisible:false,rightOffset:20,borderColor:'#242d38'}});
+chart.timeScale().subscribeVisibleLogicalRangeChange(r=>r&&sub.timeScale().setVisibleLogicalRange(r));
 const cs=chart.addCandlestickSeries({upColor:'#2ebd85',downColor:'#f6465d',borderVisible:false,wickUpColor:'#2ebd85',wickDownColor:'#f6465d'});
-const vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'v'});
-chart.priceScale('v').applyOptions({scaleMargins:{top:.85,bottom:0}});
-let P=[],first=true;
-const fmt=x=>x==null||isNaN(x)?'-':(x>=100?x.toFixed(2):x.toFixed(5));
-
-async function load(){
-  $('err').textContent='';
-  try{
-    const d=analyze(await klines($('coin').value,$('tf').value));
-    cs.setData(d.candles);vs.setData(d.volume);P=d.positions;
-    if(first){chart.timeScale().fitContent();first=false}
-    $('price').textContent=fmt(d.price);
-    const b=$('bias');b.textContent=`${d.bias} (${d.score>0?'+':''}${d.score})`;
-    b.className=d.bias==='BULLISH'?'bull':d.bias==='BEARISH'?'bear':'';
-    $('votes').innerHTML=Object.entries(d.votes).map(([k,x])=>`<div class="row"><span>${k}</span><b class="${x>0?'up':x<0?'dn':'mu'}">${x>0?'BUY':x<0?'SELL':'-'}</b></div>`).join('')
-      +`<div class="row"><span>ADX trend filter</span><b class="${d.info.trendOK?'up':'dn'}">${d.info.trendOK?'>20 OK':'<20 sideways'}</b></div>`
-      +`<div class="row"><span>Volume confirm</span><b class="${d.info.volumeOK?'up':'dn'}">${d.info.volumeOK?'OK':'weak'}</b></div>`;
-    const i=d.info,L=[['RSI',i.rsi.toFixed(1)],['ADX',i.adx.toFixed(1)],['VWAP',fmt(i.vwap)],['Pivot',fmt(i.pivot)],
-      ['Prev-day High',fmt(i.prevHigh)],['Prev-day 50%',fmt(i.prevMid)],['Prev-day Low',fmt(i.prevLow)],
-      ['BB upper',fmt(i.bbUpper)],['BB lower',fmt(i.bbLower)],...Object.entries(d.fib).map(([k,x])=>['Fib '+k,fmt(x)])];
-    $('levels').innerHTML=L.map(([k,x])=>`<div class="row"><span>${k}</span><span>${x}</span></div>`).join('');
-    $('pos').innerHTML=[...P].reverse().slice(0,8).map(p=>`<div class="row"><span class="${p.side==='LONG'?'up':'dn'}">${p.side} ${fmt(p.entry)}</span><span class="mu">${p.candles} candles · ${p.status.toUpperCase()}</span></div>`).join('')||'<span class="mu">Abhi koi signal nahi</span>';
+const vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'v'});chart.priceScale('v').applyOptions({scaleMargins:{top:.88,bottom:0}});
+const LS=(color,w=1,sc)=>chart.addLineSeries({color,lineWidth:w,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,...(sc?{priceScaleId:sc}:{})});
+const S={sma50:LS('#4fc3f7'),sma200:LS('#ef5350',2),ema50:LS('#ffb74d'),bu:LS('#9575cd'),bm:LS('#9575cd55'),bl:LS('#9575cd'),vwap:LS('#fff176',2),st:LS('#fff',2),vma:LS('#4fc3f7',1,'v')};
+const ON={ma:1,bb:1,vwap:1,st:1,sar:1,pivot:1,fib:1,pd:1,tl:1,vol:1},G={ma:['sma50','sma200','ema50'],bb:['bu','bm','bl'],vwap:['vwap'],st:['st'],vol:['vma']};
+const CH={ma:'SMA/EMA',bb:'Bollinger',vwap:'VWAP',st:'Supertrend',sar:'SAR dots',pivot:'Pivot',fib:'Fibonacci',pd:'Prev-Day',tl:'Trendline',vol:'Volume'};
+$('chips').innerHTML=Object.keys(CH).map(k=>`<button class="on" data-k="${k}">${CH[k]}</button>`).join('');
+$('chips').onclick=e=>{const k=e.target.dataset.k;if(!k)return;ON[k]=!ON[k];e.target.className=ON[k]?'on':'';
+  (G[k]||[]).forEach(x=>S[x].applyOptions({visible:!!ON[k]}));if(k=='vol')vs.applyOptions({visible:!!ON[k]});if(k=='sar')marks();};
+let DATA=null,tab='RSI',subS=[],first=true;
+const fmt=x=>x==null||isNaN(x)?'-':(x>=100?x.toFixed(2):x>=1?x.toFixed(4):x.toFixed(6));
+const mp=(a,f)=>DATA.candles.map((r,i)=>({time:r.time,...f(a[i],i)})).filter(x=>x.value==x.value);
+function marks(){cs.setMarkers(ON.sar&&DATA?DATA.candles.map((r,i)=>({time:r.time,position:DATA.s.sarUp[i]?'belowBar':'aboveBar',color:DATA.s.sarUp[i]?'#2ebd85':'#f6465d',shape:'circle',size:.3})):[])}
+function setSub(){subS.forEach(x=>sub.removeSeries(x));subS=[];if(!DATA)return;const s=DATA.s;
+  const add=(h,o,d)=>{const x=h?sub.addHistogramSeries(o):sub.addLineSeries({lineWidth:1,priceLineVisible:false,lastValueVisible:false,...o});x.setData(d);subS.push(x);return x};
+  const ref=(x,ps)=>ps.forEach(p=>x.createPriceLine({price:p,color:'#667',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:''}));
+  if(tab=='RSI')ref(add(0,{color:'#b39ddb'},mp(s.rsi,v=>({value:v}))),[30,50,70]);
+  if(tab=='MACD'){add(1,{},mp(s.hist,v=>({value:v,color:v>=0?'#2ebd85':'#f6465d'})));add(0,{color:'#4fc3f7'},mp(s.macd,v=>({value:v})));add(0,{color:'#ffb74d'},mp(s.sig,v=>({value:v})))}
+  if(tab=='Stoch'){ref(add(0,{color:'#4fc3f7'},mp(s.K,v=>({value:v}))),[20,50,80]);add(0,{color:'#ffb74d'},mp(s.D,v=>({value:v})))}
+  if(tab=='ADX')ref(add(0,{color:'#fff176'},mp(s.adx,v=>({value:v}))),[20]);
+  const r=chart.timeScale().getVisibleLogicalRange();if(r)sub.timeScale().setVisibleLogicalRange(r)}
+$('tabs').innerHTML=['RSI','MACD','Stoch','ADX'].map(k=>`<button data-t="${k}" class="${k==tab?'on':''}">${k}</button>`).join('');
+$('tabs').onclick=e=>{const k=e.target.dataset.t;if(!k)return;tab=k;[...$('tabs').children].forEach(b=>b.className=b.dataset.t==k?'on':'');setSub()};
+async function load(){$('err').textContent='';
+  try{const d=analyze(await klines($('coin').value,$('tf').value));DATA=d;
+    cs.setData(d.candles);vs.setData(d.vol);
+    for(const k in G)for(const x of G[k])if(x!='vol')S[x]&&0;
+    const m=(a,f)=>mp(a,f||(v=>({value:v})));
+    S.sma50.setData(m(d.s.sma50));S.sma200.setData(m(d.s.sma200));S.ema50.setData(m(d.s.ema50));S.bu.setData(m(d.s.bu));S.bm.setData(m(d.s.bm));S.bl.setData(m(d.s.bl));
+    S.vwap.setData(m(d.s.vwap));S.vma.setData(m(d.s.vma));S.st.setData(m(d.s.st,(v,i)=>({value:v,color:d.s.stD[i]==1?'#2ebd85':'#f6465d'})));
+    marks();setSub();if(first){chart.timeScale().fitContent();first=false}
+    $('price').textContent=fmt(d.price);const b=$('bias');b.textContent=`${d.bias} (${d.score>0?'+':''}${d.score})`;b.className=d.bias==='BULLISH'?'bull':d.bias==='BEARISH'?'bear':'';
+    const op=d.positions.find(p=>p.status==='open');
+    $('verdict').innerHTML=op?`<span class="${op.side=='LONG'?'up':'dn'}">${op.side}</span> chal raha hai: target ${fmt(op.tp)} (${op.tpN}) lagbhag ${op.candles} candle me, SL ${fmt(op.sl)} (${op.slN}) ${op.conf?'':'<span class="mu">· FAKE RISK: ADX<20 ya volume weak</span>'}`:'<span class="mu">Abhi koi naya decision nahi (WAIT)</span>';
+    $('votes').innerHTML=Object.entries(d.votes).map(([k,[v,t]])=>`<div class="row"><span>${k} <span class="mu">${t}</span></span><b class="${v>0?'up':v<0?'dn':'mu'}">${v>0?'BUY':v<0?'SELL':'-'}</b></div>`).join('')
+      +`<div class="row"><span>ADX filter <span class="mu">${d.info.adx.toFixed(0)}</span></span><b class="${d.info.trendOK?'up':'dn'}">${d.info.trendOK?'trend OK':'sideways'}</b></div>`
+      +`<div class="row"><span>Volume vs average</span><b class="${d.info.volumeOK?'up':'dn'}">${d.info.volumeOK?'OK':'weak'}</b></div>`;
+    $('pos').innerHTML=[...d.positions].reverse().slice(0,10).map(p=>`<div class="row"><span class="${p.side==='LONG'?'up':'dn'}">${p.side} ${fmt(p.entry)} → ${p.tpN}</span><span class="mu">${p.candles}c · ${p.status.toUpperCase()}${p.conf?'':' · fake?'}</span></div>`).join('')||'<span class="mu">Koi decision nahi</span>';
     $('upd').textContent=new Date().toLocaleTimeString();
-  }catch(e){$('err').textContent='Error: '+e.message}
-}
+  }catch(e){$('err').textContent='Error: '+e.message}}
 const cv=$('ov'),ctx=cv.getContext('2d');
-function draw(){
-  const w=$('wrap'),r=devicePixelRatio||1,W=w.clientWidth,H=w.clientHeight;
-  if(cv.width!==W*r||cv.height!==H*r){cv.width=W*r;cv.height=H*r}
-  ctx.setTransform(r,0,0,r,0,0);ctx.clearRect(0,0,W,H);
-  const ts=chart.timeScale(),bs=ts.options().barSpacing;
-  for(const p of P){
-    let x1=ts.timeToCoordinate(p.t0),x2=ts.timeToCoordinate(p.t1);
-    if(x1==null&&x2==null)continue;
-    x1=x1??0;x2=(x2??W)+bs;
-    const ye=cs.priceToCoordinate(p.entry),yt=cs.priceToCoordinate(p.tp),ys=cs.priceToCoordinate(p.sl);
-    if(ye==null||yt==null||ys==null)continue;
-    const wd=x2-x1;
-    ctx.fillStyle='rgba(46,189,133,.22)';ctx.fillRect(x1,Math.min(ye,yt),wd,Math.abs(yt-ye));
-    ctx.fillStyle='rgba(246,70,93,.22)';ctx.fillRect(x1,Math.min(ye,ys),wd,Math.abs(ys-ye));
-    ctx.strokeStyle='#cfd6e0';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(x1,ye);ctx.lineTo(x1+wd,ye);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle=p.side==='LONG'?'#2ebd85':'#f6465d';ctx.font='600 11px system-ui';
-    ctx.fillText(`${p.side} 1:2 ${p.candles} candles ${p.status.toUpperCase()}`,x1+4,Math.min(ye,yt,ys)+12);
-    ctx.fillStyle='#8b96a5';ctx.font='10px system-ui';
-    ctx.fillText('TP '+fmt(p.tp),x1+4,yt+(yt<ye?12:-4));ctx.fillText('SL '+fmt(p.sl),x1+4,ys+(ys<ye?12:-4));
-  }
-  requestAnimationFrame(draw);
-}
+function draw(){const w=$('wrap'),r=devicePixelRatio||1,W=w.clientWidth,H=w.clientHeight;
+  if(cv.width!==W*r||cv.height!==H*r){cv.width=W*r;cv.height=H*r}ctx.setTransform(r,0,0,r,0,0);ctx.clearRect(0,0,W,H);
+  if(DATA){const ts=chart.timeScale(),bs=ts.options().barSpacing,lastT=DATA.candles[DATA.candles.length-1].time,lx=ts.timeToCoordinate(lastT),st=DATA.step;
+    const X=t=>{const x=ts.timeToCoordinate(t);return x!=null?x:(lx??W)+(t-lastT)/st*bs},Y=p=>cs.priceToCoordinate(p);
+    const hl=(p,txt,col,dash)=>{const y=Y(p);if(y==null||p!=p)return;ctx.strokeStyle=col;ctx.lineWidth=1;ctx.setLineDash(dash?[4,4]:[]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=col;ctx.font='10px system-ui';ctx.fillText(txt+' '+fmt(p),4,y-2)};
+    const v=DATA.lv;
+    if(ON.pivot){hl(v.P,'P','#fff17699',1);hl(v.R1,'R1','#f6465d88',1);hl(v.R2,'R2','#f6465d88',1);hl(v.S1,'S1','#2ebd8588',1);hl(v.S2,'S2','#2ebd8588',1)}
+    if(ON.pd){hl(v.pH,'Prev High','#4dd0e199');hl(v.mid,'Prev 50%','#4dd0e199',1);hl(v.pL,'Prev Low','#4dd0e199')}
+    if(ON.fib)DATA.fib.forEach(([q,p])=>hl(p,'Fib '+q,'#ffd54f99',1));
+    if(ON.tl)[['sup','#2ebd85'],['res','#f6465d']].forEach(([k,col])=>{const a=DATA.tl[k];if(!a)return;const x1=X(a[0][0]),y1=Y(a[0][1]),x2=X(a[1][0]),y2=Y(a[1][1]);if(y1==null||y2==null)return;const m=(y2-y1)/(x2-x1);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(W,y2+m*(W-x2));ctx.stroke()});
+    for(const p of DATA.positions){const x1=X(p.t0),x2=X(p.t1)+bs,ye=Y(p.entry),yt=Y(p.tp),ys=Y(p.sl);if(ye==null||yt==null||ys==null||x2<0||x1>W)continue;const wd=x2-x1,open=p.status=='open';
+      ctx.fillStyle='rgba(46,189,133,'+(p.conf?.24:.1)+')';ctx.fillRect(x1,Math.min(ye,yt),wd,Math.abs(yt-ye));ctx.fillStyle='rgba(246,70,93,'+(p.conf?.24:.1)+')';ctx.fillRect(x1,Math.min(ye,ys),wd,Math.abs(ys-ye));
+      ctx.strokeStyle=p.conf?'#cfd6e0':'#8b96a5';ctx.setLineDash([5,4]);ctx.strokeRect(x1,Math.min(yt,ys),wd,Math.abs(yt-ys));ctx.beginPath();ctx.moveTo(x1,ye);ctx.lineTo(x1+wd,ye);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=p.side=='LONG'?'#2ebd85':'#f6465d';ctx.font='600 11px system-ui';ctx.fillText(`${p.side} ${p.candles}c ${p.status.toUpperCase()}${p.conf?'':' FAKE?'}`,x1+3,Math.min(yt,ys)+12);
+      ctx.fillStyle='#8b96a5';ctx.font='10px system-ui';ctx.fillText(`TP ${p.tpN}`,x1+3,yt+(yt<ye?11:-3));ctx.fillText(`SL ${p.slN}`,x1+3,ys+(ys<ye?11:-3));
+      if(open&&lx!=null){const yc=Y(DATA.price);ctx.strokeStyle=p.side=='LONG'?'#2ebd85':'#f6465d';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(lx,yc);ctx.lineTo(X(p.t1),yt);ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=1;ctx.fillText('aage ~'+Math.round((p.t1-lastT)/st)+' candle',Math.max(lx,x1)+3,yt+(yt<ye?-14:24))}}
+  }requestAnimationFrame(draw)}
 $('coin').innerHTML=COINS.map(c=>`<option>${c}</option>`).join('');
 $('coin').onchange=$('tf').onchange=()=>{first=true;load()};
-load();draw();setInterval(load,20000);
-</script>
-</body>
-</html>
+load();draw();setInterval(load,5000);
+</script></body></html>
